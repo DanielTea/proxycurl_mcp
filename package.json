@@ -1,0 +1,28 @@
+{
+  "name": "proxycurl-mcp-server",
+  "version": "1.0.0",
+  "description": "Claude Desktop MCP server for Proxycurl LinkedIn API",
+  "main": "server.js",
+  "type": "module",
+  "bin": {
+    "proxycurl-mcp": "./server.js"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "proxycurl",
+    "linkedin",
+    "mcp",
+    "claude",
+    "anthropic"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.11.0",
+    "axios": "^1.9.0",
+    "dotenv": "^16.5.0"
+  }
+}
