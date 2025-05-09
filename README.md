@@ -19,7 +19,7 @@ This is a Node.js-based Model Context Protocol (MCP) server that exposes Proxycu
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/yourusername/proxycurl-mcp-server.git
+   git clone https://github.com/dbogardus/proxycurl-mcp-server.git
    cd proxycurl-mcp-server
    ```
 
