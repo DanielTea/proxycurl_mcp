@@ -1,6 +1,6 @@
-# Proxycurl MCP Server for Claude Desktop
+# Proxycurl MCP Server
 
-This is a Node.js-based Model Context Protocol (MCP) server that exposes Proxycurl's LinkedIn data API to Claude Desktop. It allows Claude to access LinkedIn profile data, company information, and search for employees.
+This is a Node.js-based Model Context Protocol (MCP) server that exposes Proxycurl's LinkedIn data API. It can be used with any MCP-compatible client (e.g., Claude Desktop) to access LinkedIn profile data, company information, and search for employees.
 
 ## Features
 
@@ -13,7 +13,7 @@ This is a Node.js-based Model Context Protocol (MCP) server that exposes Proxycu
 
 - Node.js (v14 or higher)
 - A Proxycurl API key (get one at https://nubela.co/proxycurl/)
-- Claude Desktop installed
+- An MCP-compatible client (e.g., Claude Desktop)
 
 ## Installation
 
@@ -47,7 +47,7 @@ export PROXYCURL_API_KEY=your_api_key_here
 
 This is useful for development or when running the CLI directly.
 
-### Option 2: Claude Desktop Configuration (recommended)
+### Option 2: Example: Claude Desktop Configuration (recommended for Claude Desktop users)
 
 To configure Claude Desktop to use this MCP server:
 
@@ -79,43 +79,34 @@ To configure Claude Desktop to use this MCP server:
 
 ## Usage
 
-**Pricing:** Each Proxycurl credit costs $0.0264 USD.
-
-Once configured, Claude Desktop will be able to access LinkedIn data through the following tools:
+Once configured, your MCP client will be able to access LinkedIn data through the following tools:
 
 - `get_person_profile`: Get a person's LinkedIn profile by URL
-  - **Cost**: 1 credit per profile request
   - **Example**: `linkedinUrl: "https://www.linkedin.com/in/williamhgates"`
   - Returns comprehensive profile data including experience, education, skills, certifications
 
 - `get_company_profile`: Get a company's LinkedIn profile by URL
-  - **Cost**: 1 credit per company profile request
   - **Example**: `linkedinUrl: "https://www.linkedin.com/company/microsoft"`
   - Returns detailed company data including description, size, industry, and specialties
 
 - `lookup_person`: Find a person's LinkedIn profile by name and company
-  - **Cost**: 1 credit per successful lookup
   - **Important**: Requires both name and company parameters for best results
   - **Example**: `name: "Bill Gates", company: "microsoft.com"` 
   - Returns LinkedIn URL for the person if found
 
 - `search_employees`: Search for employees at a company with role and keyword filters
-  - **Cost**: 1 credit per search request (returns up to 20 results)
   - **Example**: `linkedinUrl: "https://www.linkedin.com/company/microsoft", role: "Software Engineer"`
   - Returns list of employees with basic profile information
 
 - `search_companies`: Search for companies by name or domain
-  - **Cost**: 1 credit per search request
   - **Example**: `query: "Microsoft"` or `query: "microsoft.com", limit: 5`
   - Use this to find LinkedIn company URLs when you only have the company name
 
 - `search_people`: Search for people on LinkedIn by keywords, title, company, and location
-  - **Cost**: 1 credit per search request (returns multiple results)
   - **Example**: `query: "data science", title: "Lead", companyDomain: "microsoft.com", location: "Seattle"`
   - Use this for finding professionals based on skills, job titles, or industries
 
 - `advanced_search_companies`: Advanced search for companies with detailed filtering options
-  - **Cost**: 3 credits per search request
   - **Example**: `country: "US", industry: "technology", employee_count_min: 1000, founded_after_year: 2010`
   - Much more powerful than basic company search with many filtering options
   - Supports Boolean search expressions (AND, OR, NOT) in name and description fields
@@ -127,17 +118,18 @@ To modify the server or add new features:
 
 1. Edit `server.js` to add or modify API endpoints
 2. Run `npm install -g .` to install your changes globally
-3. Configure Claude Desktop with `npm run configure`
 
-### Debugging
+### Local Test Environment (`test.env`)
 
-By default, the server doesn't output any console logs to avoid interfering with the MCP JSON communication. To enable debug logging, set the `PROXYCURL_DEBUG` environment variable to `true`:
+For local development and running test scripts (e.g., those in the `tests/` directory) directly, you can use a `test.env` file in the project root to manage your API key and debug settings. This file is typically included in `.gitignore` and should not be committed to the repository.
+
+Create a `test.env` file with the following content:
 
 ```bash
-PROXYCURL_DEBUG=true node server.js
+PROXYCURL_API_KEY=your_actual_proxycurl_api_key_here
 ```
 
-**Important:** Only enable debug logging during development, not when using with Claude Desktop.
+Replace `your_actual_proxycurl_api_key_here` with your Proxycurl API key. The test scripts are often configured to load environment variables from this file if it exists.
 
 ## License
 

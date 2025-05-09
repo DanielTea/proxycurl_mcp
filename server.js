@@ -107,7 +107,7 @@ function safeLog(type, message, data = null) {
 const server = new Server(
   { name: "curl-mcp", version: "1.0.0" },
   {
-    description: "LinkedIn data search. Allows retrieving detailed LinkedIn profile data for people and companies, as well as searching for professionals and organizations. PRICING: Each credit costs $0.0264 USD.",
+    description: "LinkedIn data search. Allows retrieving detailed LinkedIn profile data for people and companies, as well as searching for professionals and organizations. ",
     capabilities: {
       tools: {},
     },
