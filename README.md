@@ -112,6 +112,52 @@ Once configured, your MCP client will be able to access LinkedIn data through th
   - Supports Boolean search expressions (AND, OR, NOT) in name and description fields
   - Can return up to 10,000,000 results per search
 
+## Troubleshooting
+
+### 403 Forbidden Errors
+
+If you're getting 403 errors, it usually indicates one of these issues:
+
+1. **Not enough credits** - Most common cause! Check your account balance at https://nubela.co/proxycurl/
+2. **Invalid or expired API key** - Verify your API key in the Proxycurl dashboard  
+3. **Insufficient account permissions** - Ensure your plan includes access to search endpoints
+4. **Account suspended** - Check for payment issues or policy violations
+
+**Note**: Different API endpoints consume different amounts of credits. Search operations typically cost 3 credits per result, while profile lookups cost 1 credit.
+
+### Testing Your API Key
+
+You can test your API key using the included test script:
+
+```bash
+# Test with environment variable
+export PROXYCURL_API_KEY=your_api_key
+node test-api-key.js
+
+# Test with command line argument
+node test-api-key.js your_api_key
+```
+
+### Enable Debug Logging
+
+To see detailed request/response logs, set the debug environment variable:
+
+```bash
+export PROXYCURL_DEBUG=true
+```
+
+### Common API Key Issues
+
+- **API key too short**: Proxycurl API keys are typically 20+ characters long
+- **Wrong endpoint permissions**: Some plans don't include access to all endpoints
+- **Credit exhaustion**: Check your account dashboard for remaining credits
+
+### Additional Tools for Debugging
+
+The server now includes a `test_api_key` tool that you can use from your MCP client to validate your API key without making a full search request.
+
+For more help, visit the [Proxycurl Documentation](https://nubela.co/proxycurl/docs) or contact their support team.
+
 ## Development
 
 To modify the server or add new features:

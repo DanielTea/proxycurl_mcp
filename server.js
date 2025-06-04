@@ -93,12 +93,13 @@ function getMcpErrorCode(httpStatus) {
 function safeLog(type, message, data = null) {
   // Only log in development environment when explicitly enabled
   // This prevents logs from breaking the JSON communication with Claude Desktop
-  if (process.env.PROXYCURL_DEBUG === 'true') {
+  // However, always log errors to stderr for debugging
+  if (process.env.PROXYCURL_DEBUG === 'true' || type === 'error') {
     const output = data ? `${message}: ${JSON.stringify(data)}` : message;
     if (type === 'error') {
-      console.error(output);
-    } else {
-      console.log(output);
+      console.error(`[PROXYCURL-MCP] ${output}`);
+    } else if (process.env.PROXYCURL_DEBUG === 'true') {
+      console.log(`[PROXYCURL-MCP] ${output}`);
     }
   }
 }
@@ -129,6 +130,11 @@ class ProxycurlClient {
     safeLog('info', `API Key length: ${apiKey.length} characters`);
     safeLog('info', `API Key first 4 chars: ${apiKey.substring(0, 4)}...`);
     
+    // Validate API key format - Proxycurl API keys are typically longer
+    if (apiKey.length < 15) {
+      safeLog('warn', `WARNING: API key seems unusually short (${apiKey.length} chars). Proxycurl API keys are typically 20+ characters.`);
+    }
+    
     // Configure axios with default headers
     this.axiosInstance = axios.create({
       headers: {
@@ -145,6 +151,61 @@ class ProxycurlClient {
       safeLog('error', `Request error: ${error.message}`);
       return Promise.reject(error);
     });
+  }
+
+  // Add API key validation method
+  async validateApiKey() {
+    safeLog('info', 'Validating API key with a simple request...');
+    try {
+      // Test with a minimal request to check API key validity
+      const response = await this.axiosInstance.get(`${PROXYCURL_API_BASE}/v2/linkedin`, {
+        params: {
+          url: 'https://www.linkedin.com/in/williamhgates/' // Using a known public profile for testing
+        }
+      });
+      
+      safeLog('info', 'API key validation successful');
+      return { valid: true, message: 'API key is valid' };
+    } catch (error) {
+      safeLog('error', `API key validation failed: ${error.message}`);
+      if (error.response) {
+        safeLog('error', `Validation error status: ${error.response.status}`);
+        safeLog('error', `Validation error data: ${JSON.stringify(error.response.data)}`);
+        
+        if (error.response.status === 403) {
+          // Check for specific credit-related errors
+          if (error.response.data?.description?.includes('Not enough credits')) {
+            return { 
+              valid: false, 
+              message: 'API key is valid but your Proxycurl account has insufficient credits. Please add credits at https://nubela.co/proxycurl/',
+              details: error.response.data
+            };
+          }
+          return { 
+            valid: false, 
+            message: 'API key is invalid or account lacks permissions. Please check your Proxycurl API key and account status.',
+            details: error.response.data
+          };
+        } else if (error.response.status === 401) {
+          return { 
+            valid: false, 
+            message: 'API key is unauthorized. Please verify your Proxycurl API key.',
+            details: error.response.data
+          };
+        } else if (error.response.status === 429) {
+          return { 
+            valid: false, 
+            message: 'Rate limit exceeded or insufficient credits. Please check your Proxycurl account.',
+            details: error.response.data
+          };
+        }
+      }
+      return { 
+        valid: false, 
+        message: `API validation failed: ${error.message}`,
+        details: error.response?.data || null
+      };
+    }
   }
 
   async getPersonProfile(url, options = {}) {
@@ -471,6 +532,20 @@ ${JSON.stringify(response.data, null, 2)}`);
           safeLog('error', "Response data:", JSON.stringify(error.response.data));
           const detail = error.response.data?.detail || error.message;
           const mcpCode = getMcpErrorCode(error.response.status);
+          
+          // Provide more specific error messages for 403 responses
+          if (error.response.status === 403) {
+            const apiKeyInfo = `API key: ${this.apiKey.substring(0, 4)}...`;
+            
+            // Check for specific credit-related errors
+            if (error.response.data?.description?.includes('Not enough credits') || error.response.data?.code === 403) {
+              throw new MCPError(mcpCode, `Search failed - Your Proxycurl account has insufficient credits. Please add credits to your account at https://nubela.co/proxycurl/. ${apiKeyInfo}. Original error: ${detail}`);
+            }
+            
+            const enhancedMessage = `Failed to search people - Access Forbidden (403). This usually indicates: 1) Invalid API key, 2) Insufficient account permissions, 3) Account out of credits, or 4) API key lacks access to search endpoints. ${apiKeyInfo}. Original error: ${detail}`;
+            throw new MCPError(mcpCode, enhancedMessage);
+          }
+          
           throw new MCPError(mcpCode, `Failed to search people with params ${JSON.stringify(searchParams)}: ${detail} (Status: ${error.response.status})`);
         } else if (error.request) {
           safeLog('error', "No response received. Request:", error.request);
@@ -486,6 +561,12 @@ ${JSON.stringify(response.data, null, 2)}`);
     safeLog('info', 'Resetting search state: Clearing next page URL.');
     this.nextPageSearchPeopleUrl = null;
     return { success: true, message: 'Search state reset.' }; // Return object
+  }
+
+  async testApiKey() {
+    safeLog('info', 'Testing API key functionality...');
+    const validation = await this.validateApiKey();
+    return validation;
   }
 
   async advancedSearchCompanies(filters = {}) {
@@ -1131,6 +1212,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           type: "object",
           properties: {}
         }
+      },
+      {
+        name: "test_api_key", 
+        description: "Tests the validity of the Proxycurl API key by making a simple request. Useful for debugging authentication issues.",
+        inputSchema: {
+          type: "object",
+          properties: {}
+        }
       }
     ]
   };
@@ -1211,6 +1300,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         
       case 'reset_search_state':
         result = await proxycurlClient.reset_search_state();
+        break;
+        
+      case 'test_api_key':
+        result = await proxycurlClient.testApiKey();
         break;
         
       default:
