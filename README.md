@@ -156,6 +156,21 @@ export PROXYCURL_DEBUG=true
 
 The server now includes a `test_api_key` tool that you can use from your MCP client to validate your API key without making a full search request.
 
+### Automatic Retry Logic
+
+The server includes robust retry logic for handling temporary issues:
+
+- **Rate Limiting (429)**: Automatically retries with exponential backoff (5s, 10s, 20s delays)
+- **Server Errors (500, 502, 503, 504)**: Retries with shorter delays (1s, 2s, 4s)
+- **Temporary Credit Issues**: Retries 403 "not enough credits" errors that may be temporary
+- **Network Errors**: Retries connection failures and timeouts
+- **Max Retries**: Default of 3 retries with exponential backoff and jitter to prevent thundering herd
+
+You can test the retry logic with:
+```bash
+node test-retry-logic.js YOUR_API_KEY
+```
+
 For more help, visit the [Proxycurl Documentation](https://nubela.co/proxycurl/docs) or contact their support team.
 
 ## Development

@@ -222,9 +222,7 @@ class ProxycurlClient {
       safeLog('info', `DEBUG: Person profile URL: ${requestUrl}`);
       safeLog('info', `DEBUG: Person profile params: ${JSON.stringify(params)}`);
       
-      const response = await this.axiosInstance.get(requestUrl, {
-        params: params
-      });
+      const response = await this.makeRequestWithRetry(requestUrl, params);
       
       // Log the full JSON response
       safeLog('info', `Person profile response (${url}):\n${JSON.stringify(response.data, null, 2)}`);
@@ -263,9 +261,7 @@ class ProxycurlClient {
       safeLog('info', `DEBUG: Company profile URL: ${requestUrl}`);
       safeLog('info', `DEBUG: Company profile params: ${JSON.stringify(params)}`);
       
-      const response = await this.axiosInstance.get(requestUrl, {
-        params: params
-      });
+      const response = await this.makeRequestWithRetry(requestUrl, params);
       
       // Log the full JSON response
       safeLog('info', `Company profile response (${url}):\n${JSON.stringify(response.data, null, 2)}`);
@@ -335,9 +331,7 @@ class ProxycurlClient {
       
       safeLog('info', "API parameters:", params);
       
-      const response = await this.axiosInstance.get(`${PROXYCURL_API_BASE}/linkedin/profile/resolve`, {
-        params: params
-      });
+      const response = await this.makeRequestWithRetry(`${PROXYCURL_API_BASE}/linkedin/profile/resolve`, params);
       
       // Log the full JSON response with person info, not using name variable
       safeLog('info', `Person lookup response for ${personInfo}:\n${JSON.stringify(response.data, null, 2)}`);
@@ -427,9 +421,7 @@ class ProxycurlClient {
       safeLog('info', `DEBUG: Employee search URL: ${requestUrl}`);
       safeLog('info', `DEBUG: Employee search params: ${JSON.stringify(params)}`);
       
-      const response = await this.axiosInstance.get(requestUrl, {
-        params: params
-      });
+      const response = await this.makeRequestWithRetry(requestUrl, params);
       
       // Log employee search response for debugging
       safeLog('info', `Employee search response (${url})\nFound ${response.data.total || 0} employees`);
@@ -461,6 +453,75 @@ class ProxycurlClient {
         throw new MCPError(ErrorCode.INTERNAL, `Failed to search employees for company URL '${url}' (role: ${roleInfo}, keyword: ${keywordInfo}): ${error.message}`);
       }
     }
+  }
+
+  // Helper method for API calls with retry logic for temporary issues
+  async makeRequestWithRetry(url, params, maxRetries = 3) {
+    for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+      try {
+        const response = await this.axiosInstance.get(url, { params });
+        return response;
+      } catch (error) {
+        const isRetryableError = this.isRetryableError(error);
+        const isLastAttempt = attempt > maxRetries;
+        
+        if (isRetryableError && !isLastAttempt) {
+          const delay = this.calculateRetryDelay(attempt, error.response?.status);
+          safeLog('warn', `Attempt ${attempt}/${maxRetries + 1} failed with ${error.response?.status || 'network'} error, retrying in ${delay}ms...`);
+          safeLog('warn', `Error: ${error.response?.data?.description || error.message}`);
+          
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        
+        // Re-throw the error if not retryable or max retries exceeded
+        if (isLastAttempt && isRetryableError) {
+          safeLog('error', `Max retries (${maxRetries}) exceeded for ${error.response?.status || 'network'} error`);
+        }
+        throw error;
+      }
+    }
+  }
+
+  // Determine if an error is worth retrying
+  isRetryableError(error) {
+    if (!error.response) {
+      // Network errors (no response) - always retry
+      return true;
+    }
+    
+    const status = error.response.status;
+    
+    // Retry on these HTTP status codes
+    if ([429, 500, 502, 503, 504].includes(status)) {
+      return true;
+    }
+    
+    // Retry on 403 "not enough credits" which might be temporary
+    if (status === 403 && error.response.data?.description?.includes('Not enough credits')) {
+      return true;
+    }
+    
+    // Don't retry on client errors (400, 401, 404, etc.) or other 403s
+    return false;
+  }
+
+  // Calculate retry delay with exponential backoff
+  calculateRetryDelay(attempt, statusCode) {
+    // Base delay increases exponentially: 1s, 2s, 4s, 8s...
+    let baseDelay = Math.pow(2, attempt - 1) * 1000;
+    
+    // Special handling for rate limiting (429)
+    if (statusCode === 429) {
+      // For rate limits, use longer delays: 5s, 10s, 20s, 40s...
+      baseDelay = Math.pow(2, attempt - 1) * 5000;
+    }
+    
+    // Add some randomness to prevent thundering herd (±25%)
+    const jitter = baseDelay * 0.25 * (Math.random() - 0.5);
+    
+    // Cap maximum delay at 30 seconds
+    return Math.min(baseDelay + jitter, 30000);
   }
 
   // Modified search_people to handle initial search and pagination
@@ -512,9 +573,9 @@ class ProxycurlClient {
         safeLog('info', `DEBUG: New Search People URL: ${requestUrl}`);
         safeLog('info', `DEBUG: New Search People Params: ${JSON.stringify(searchParams)}`);
 
-        // Make GET request for a new search, passing params in the query string
+        // Make GET request for a new search with retry logic
         // Exactly matching the curl example from the docs
-        const response = await this.axiosInstance.get(requestUrl, { params: searchParams }); // Use GET with params
+        const response = await this.makeRequestWithRetry(requestUrl, searchParams); // Use retry logic
 
         safeLog('info', `New search people response:
 ${JSON.stringify(response.data, null, 2)}`);
@@ -539,10 +600,11 @@ ${JSON.stringify(response.data, null, 2)}`);
             
             // Check for specific credit-related errors
             if (error.response.data?.description?.includes('Not enough credits') || error.response.data?.code === 403) {
-              throw new MCPError(mcpCode, `Search failed - Your Proxycurl account has insufficient credits. Please add credits to your account at https://nubela.co/proxycurl/. ${apiKeyInfo}. Original error: ${detail}`);
+              const enhancedMessage = `Search failed - Proxycurl returned "Not enough credits" error. This may be temporary. Try checking your credit balance and retrying the request. ${apiKeyInfo}. Original error: ${detail}`;
+              throw new MCPError(mcpCode, enhancedMessage);
             }
             
-            const enhancedMessage = `Failed to search people - Access Forbidden (403). This usually indicates: 1) Invalid API key, 2) Insufficient account permissions, 3) Account out of credits, or 4) API key lacks access to search endpoints. ${apiKeyInfo}. Original error: ${detail}`;
+            const enhancedMessage = `Failed to search people - Access Forbidden (403). This usually indicates: 1) Invalid API key, 2) Insufficient account permissions, 3) Account out of credits (possibly temporary), or 4) API key lacks access to search endpoints. Try retrying the request. ${apiKeyInfo}. Original error: ${detail}`;
             throw new MCPError(mcpCode, enhancedMessage);
           }
           
@@ -604,14 +666,9 @@ ${JSON.stringify(response.data, null, 2)}`);
       const requestUrl = `${PROXYCURL_API_BASE}/v2/search/company`;
       safeLog('info', `Making request to: ${requestUrl}`);
       
-      // Make the request with Authorization header and URL parameters
+      // Make the request with retry logic
       // Exactly matching the curl example from the docs
-      const response = await axios.get(requestUrl, {
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`
-        },
-        params: filterParams
-      });
+      const response = await this.makeRequestWithRetry(requestUrl, filterParams);
       
       safeLog('info', `Advanced company search response (with ${Object.keys(filterParams).length} filters):\n${JSON.stringify(response.data, null, 2)}`);
       

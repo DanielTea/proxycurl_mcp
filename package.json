@@ -1,7 +1,7 @@
 {
   "name": "proxycurl-mcp-server",
-  "version": "1.0.0",
-  "description": "Claude Desktop MCP server for Proxycurl LinkedIn API",
+  "version": "1.1.0",
+  "description": "Claude Desktop MCP server for Proxycurl LinkedIn API with automatic retry logic for rate limiting and temporary errors",
   "main": "server.js",
   "type": "module",
   "bin": {
